@@ -2,6 +2,17 @@
 
 This project runs on an ESP32-C3 module and periodically updates an A record on Name.com with the current external IP address of the internet connection.
 
+## GitHub Repository
+This project is version controlled with Git. To push to GitHub:
+
+1. Create a new repository on GitHub.com named `esp32-namecom-ddns`
+2. Push the local repository:
+   ```bash
+   git remote add origin git@github.com:ywemay/esp32-namecom-ddns.git
+   git branch -M main
+   git push -u origin main
+   ```
+
 ## Features
 - Periodically checks external IP using public IP services
 - Updates Name.com DNS A record via API
