@@ -1,0 +1,59 @@
+# Configuration files (sensitive data)
+config.h
+config.h.backup
+
+# PlatformIO build directories
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Arduino IDE build files
+*.elf
+*.bin
+*.hex
+*.eep
+*.lss
+*.sym
+*.map
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+
+# Compiled files
+*.o
+*.a
+*.so
+*.dylib
+
+# Backup files
+*.bak
+*.backup
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
