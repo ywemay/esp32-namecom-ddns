@@ -315,6 +315,11 @@ void startWebServer() {
     handleSave();
   });
   
+  // Scan WiFi networks
+  server.on("/scan-networks", HTTP_GET, []() {
+    handleScanNetworks();
+  });
+  
   // Factory reset
   server.on("/factory-reset", HTTP_POST, []() {
     if (!apMode) {
@@ -355,7 +360,10 @@ void sendConfigPage() {
   html += "button{background:#4CAF50;color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;width:100%;font-size:16px;}";
   html += "button:hover{background:#45a049;} .section{margin-bottom:20px;padding:15px;border:1px solid #ddd;border-radius:4px;}";
   html += ".section h2{margin-top:0;color:#555;} .info{background:#e7f3fe;border-left:4px solid #2196F3;padding:10px;margin-bottom:15px;}";
-  html += ".warning{background:#fff3cd;border-left:4px solid #ffc107;padding:10px;margin-bottom:15px;}</style></head><body>";
+  html += ".warning{background:#fff3cd;border-left:4px solid #ffc107;padding:10px;margin-bottom:15px;}";
+  html += ".signal-bars{display:inline-block;width:60px;} .bar{height:4px;margin:1px;background:#ddd;border-radius:1px;} .bar.filled{background:#4CAF50;} .bar.weak{background:#ffc107;} .bar.none{background:#dc3545;}";
+  html += "#scanStatus{margin:5px 0;font-size:14px;} #scanStatus.scanning{color:#2196F3;} #scanStatus.success{color:#4CAF50;} #scanStatus.error{color:#dc3545;}";
+  html += "</style></head><body>";
   
   html += "<h1>⚡ ESP32 DDNS Configuration</h1>";
   
@@ -374,8 +382,13 @@ void sendConfigPage() {
   
   // WiFi Section
   html += "<div class='section'><h2>📶 WiFi Configuration</h2>";
-  html += "<label>WiFi SSID:</label><input type='text' name='wifiSSID' value='" + wifiSSID + "' required>";
+  html += "<label>WiFi SSID:</label><input type='text' id='wifiSSID' name='wifiSSID' value='" + wifiSSID + "' required>";
+  html += "<label>Or select from scanned networks:</label>";
+  html += "<select id='networkSelect' onchange='selectNetwork()'><option value=''>-- Scan for networks --</option></select>";
+  html += "<button type='button' id='scanBtn' onclick='scanNetworks()' style='margin:10px 0;background:#2196F3;'>📡 Scan Networks</button>";
+  html += "<div id='scanStatus'></div>";
   html += "<label>WiFi Password:</label><input type='password' name='wifiPassword' value='" + wifiPassword + "'>";
+  html += "<small>Manual entry still works for hidden networks</small>";
   html += "</div>";
   
   // Name.com Section
@@ -416,6 +429,62 @@ void sendConfigPage() {
   html += "<hr><form method='GET' action='/reset' style='display:inline;'><button type='submit' style='background:#f44336;'>🔄 Factory Reset</button></form>";
   html += " <form method='POST' action='/reboot' style='display:inline;'><button type='submit' style='background:#2196F3;'>🔌 Reboot</button></form>";
   
+  html += "<script>";
+  html += "function scanNetworks(){";
+  html += "  var btn=document.getElementById('scanBtn');";
+  html += "  var status=document.getElementById('scanStatus');";
+  html += "  var select=document.getElementById('networkSelect');";
+  html += "  btn.disabled=true;";
+  html += "  btn.innerHTML='⏳ Scanning...';";
+  html += "  status.className='scanning';";
+  html += "  status.innerHTML='Scanning for networks...';";
+  html += "  select.innerHTML='<option>Loading...</option>';";
+  html += "  fetch('/scan-networks').then(function(r){return r.json();}).then(function(data){";
+  html += "    btn.disabled=false;";
+  html += "    btn.innerHTML='📡 Scan Networks';";
+  html += "    if(data.networks&&data.networks.length>0){";
+  html += "      select.innerHTML='<option value=\"\">-- Select a network --</option>';";
+  html += "      for(var i=0;i<data.networks.length;i++){";
+  html += "        var n=data.networks[i];";
+  html += "        var ssid=n.ssid||'(Hidden Network)';";
+  html += "        var bars=getSignalBars(n.rssi);";
+  html += "        var opt=document.createElement('option');";
+  html += "        opt.value=ssid;";
+  html += "        opt.innerHTML=ssid+' '+bars+' ('+n.rssi+'dBm)';";
+  html += "        select.appendChild(opt);";
+  html += "      }";
+  html += "      status.className='success';";
+  html += "      status.innerHTML='Found '+data.networks.length+' networks';";
+  html += "    }else{";
+  html += "      select.innerHTML='<option>No networks found</option>';";
+  html += "      status.className='error';";
+  html += "      status.innerHTML='No networks found';";
+  html += "    }";
+  html += "  }).catch(function(e){";
+  html += "    btn.disabled=false;";
+  html += "    btn.innerHTML='📡 Scan Networks';";
+  html += "    status.className='error';";
+  html += "    status.innerHTML='Scan failed: '+e;";
+  html += "    select.innerHTML='<option>Error</option>';";
+  html += "  });";
+  html += "}";
+  html += "function getSignalBars(rssi){";
+  html += "  var bars='';";
+  html += "  var filled=rssi>=-50?4:(rssi>=-60?3:(rssi>=-70?2:(rssi>=-80?1:0)));";
+  html += "  for(var i=0;i<4;i++){";
+  html += "    var cls=i<filled?'filled':'';";
+  html += "    bars+='<div class=\"bar '+cls+'\"></div>';";
+  html += "  }";
+  html += "  return '<div class=\"signal-bars\">'+bars+'</div>';";
+  html += "}";
+  html += "function selectNetwork(){";
+  html += "  var select=document.getElementById('networkSelect');";
+  html += "  var ssidInput=document.getElementById('wifiSSID');";
+  html += "  if(select.value){";
+  html += "    ssidInput.value=select.value;";
+  html += "  }";
+  html += "}";
+  html += "</script>";
   html += "</body></html>";
   
   server.send(200, "text/html", html);
@@ -523,6 +592,83 @@ void sendResetPage() {
   html += "</body></html>";
   
   server.send(200, "text/html", html);
+}
+
+/*
+ * Handle WiFi network scanning
+ */
+void handleScanNetworks() {
+  #ifdef DEBUG_MODE
+  Serial.println("Scanning for WiFi networks...");
+  #endif
+  
+  // Start scan
+  int n = WiFi.scanNetworks();
+  
+  String jsonResponse = "{\"networks\":[";
+  
+  if (n == 0) {
+    #ifdef DEBUG_MODE
+    Serial.println("No networks found");
+    #endif
+    jsonResponse += "]}";
+  } else {
+    #ifdef DEBUG_MODE
+    Serial.print(n);
+    Serial.println(" networks found");
+    #endif
+    
+    // Create array to sort by RSSI
+    int indices[n];
+    for (int i = 0; i < n; i++) {
+      indices[i] = i;
+    }
+    
+    // Sort by RSSI (strongest first)
+    for (int i = 0; i < n; i++) {
+      for (int j = i + 1; j < n; j++) {
+        if (WiFi.RSSI(indices[j]) > WiFi.RSSI(indices[i])) {
+          int temp = indices[i];
+          indices[i] = indices[j];
+          indices[j] = temp;
+        }
+      }
+    }
+    
+    // Build JSON response
+    bool first = true;
+    for (int i = 0; i < n; i++) {
+      int idx = indices[i];
+      if (!first) {
+        jsonResponse += ",";
+      }
+      first = false;
+      
+      String ssid = WiFi.SSID(idx);
+      int rssi = WiFi.RSSI(idx);
+      
+      // Escape special characters in SSID for JSON
+      ssid.replace("\\", "\\\\");
+      ssid.replace("\"", "\\\"");
+      
+      jsonResponse += "{\"ssid\":\"" + ssid + "\",\"rssi\":" + String(rssi) + "}";
+      
+      #ifdef DEBUG_MODE
+      Serial.print("  - ");
+      Serial.print(ssid);
+      Serial.print(" (RSSI: ");
+      Serial.print(rssi);
+      Serial.println(" dBm)");
+      #endif
+    }
+    
+    jsonResponse += "]}";
+    
+    // Delete scan results to free memory
+    WiFi.scanDelete();
+  }
+  
+  server.send(200, "application/json", jsonResponse);
 }
 
 /*
